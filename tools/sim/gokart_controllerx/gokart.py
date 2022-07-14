@@ -47,7 +47,7 @@ def convert(value, in_min, in_max, out_min, out_max):
 
 W, H = 1928, 1208
 REPEAT_COUNTER = 5
-PRINT_DECIMATION = 10000
+PRINT_DECIMATION = 100
 STEER_RATIO = 15.
 
 pm = messaging.PubMaster(['roadCameraState', 'wideRoadCameraState', 'sensorEvents', 'can', "gpsLocationExternal"])
@@ -70,7 +70,7 @@ class VehicleState:
     self.bearing_deg = 0.0
     self.vel =  1 # carla.Vector3D()
     self.cruise_button = 0
-    self.is_engaged = True
+    self.is_engaged = False
     self.ignition = True
 
 
@@ -218,16 +218,16 @@ def gps_callback():
     "source": log.GpsLocationData.SensorSource.ublox,
   }
 
-  #pm.send('gpsLocationExternal', dat)
+  pm.send('gpsLocationExternal', dat)
 
 
 def fake_driver_monitoring(exit_event: threading.Event):
-  pm = messaging.PubMaster(['driverState', 'driverMonitoringState'])
+  pm = messaging.PubMaster(['driverStateV2', 'driverMonitoringState'])
   while not exit_event.is_set():
     # dmonitoringmodeld output
-    dat = messaging.new_message('driverState')
-    dat.driverState.faceProb = 1.0
-    pm.send('driverState', dat)
+    dat = messaging.new_message('driverStateV2')
+    dat.driverStateV2.leftDriverData.faceProb = 1.0
+    pm.send('driverStateV2', dat)
 
     # dmonitoringd output
     dat = messaging.new_message('driverMonitoringState')
@@ -257,7 +257,7 @@ def webcam(camerad: Camerad, exit_event: threading.Event):
   rk = Ratekeeper(20)
   # Load the video
   myframeid = 0
-  cap = cv2.VideoCapture(4) #set camera ID here, index X in /dev/videoX
+  cap = cv2.VideoCapture(6) #set camera ID here, index X in /dev/videoX
   while not exit_event.is_set():
     ret, frame = cap.read()
     if not ret:
@@ -353,7 +353,7 @@ class CarlaBridge:
 
     print("DONE")
     ###################################3
-    max_steer_angle = 30
+    max_steer_angle = 10
     """
     client = connect_carla_client()
     world = client.load_world(self._args.town)
@@ -439,10 +439,8 @@ class CarlaBridge:
 
     for t in self._threads:
       t.start()
-    print("ALL threads started")
 
     # init
-
     throttle_ease_out_counter = REPEAT_COUNTER
     brake_ease_out_counter = REPEAT_COUNTER
     steer_ease_out_counter = REPEAT_COUNTER
@@ -470,11 +468,13 @@ class CarlaBridge:
       # 1. Read the throttle, steer and brake from op or manual controls
       # 2. Set instructions in Carla
       # 3. Send current carstate to op via can
+
       cruise_button = 0
       throttle_out = steer_out = brake_out = 0.0
       throttle_op = steer_op = brake_op = 0.0
       throttle_manual = steer_manual = brake_manual = 0.0
       imu_callback()
+      gps_callback
       # --------------Step 1-------------------------------
       if not q.empty():
         message = q.get()
@@ -514,7 +514,6 @@ class CarlaBridge:
         old_throttle = throttle_out
         old_brake = brake_out
 
-
       if is_openpilot_engaged:
         sm.update(0)
         if sm['carControl'].actuators.accel != 0 or sm['carControl'].actuators.steeringAngleDeg != 0 :
@@ -523,7 +522,6 @@ class CarlaBridge:
           gc.set_turn_rate(converted_angle)
           #print("TYPE", type(converted_angle))
 
-        
         # TODO gas and brake is deprecated
         throttle_op = clip(sm['carControl'].actuators.accel / 1.6, 0.0, 1.0)
         brake_op = clip(-sm['carControl'].actuators.accel / 4.0, 0.0, 1.0)
@@ -562,7 +560,6 @@ class CarlaBridge:
             old_steer = 0
 
       # --------------Step 2-------------------------------
-
       steer_carla = steer_out / (max_steer_angle * STEER_RATIO * -1)
 
       steer_carla = np.clip(steer_carla, -1, 1)
@@ -581,14 +578,13 @@ class CarlaBridge:
       """
       vehicle_state.speed = 2
       vehicle_state.vel = 2
-    
       vehicle_state.angle = steer_out
       vehicle_state.cruise_button = cruise_button
       vehicle_state.is_engaged = is_openpilot_engaged
 
-      # if rk.frame % PRINT_DECIMATION == 0:
-      #   print("frame: ", "engaged:", is_openpilot_engaged, "; throttle: ", round(vc.throttle, 3), "; steer(c/deg): ",
-      #         round(vc.steer, 3), round(steer_out, 3), "; brake: ", round(vc.brake, 3))
+      if rk.frame % PRINT_DECIMATION == 0:
+        print("throttle: {:.2f} steer(c/deg): {:.2f}   steer out: {:.2f} ".format(vc.throttle,vc.steer, steer_out) )
+
       """
       if rk.frame % 5 == 0:
         world.tick()
@@ -599,6 +595,7 @@ class CarlaBridge:
   def close(self):
     self.started = False
     self._exit_event.set()
+
     for s in self._carla_objects:
       try:
         s.destroy()
@@ -608,33 +605,32 @@ class CarlaBridge:
       t.join()
 
   def run(self, queue, retries=-1):
-
     bridge_p = Process(target=self.bridge_keep_alive, args=(queue, retries), daemon=True)
     bridge_p.start()
     return bridge_p
-
-
-
-
-
 
 
 if __name__ == "__main__":
   q: Any = Queue()
   args = parse_args()
 
-  carla_bridge = CarlaBridge(args)
-  p = carla_bridge.run(q)
+  try:
+    carla_bridge = CarlaBridge(args)
+    p = carla_bridge.run(q)
 
+    if args.joystick:
+      # start input poll for joystick
+      from tools.sim.lib.manual_ctrl import wheel_poll_thread
 
-  if args.joystick:
-    # start input poll for joystick
-    from tools.sim.lib.manual_ctrl import wheel_poll_thread
+      wheel_poll_thread(q)
+    else:
+      # start input poll for keyboard
+      from tools.sim.lib.keyboard_ctrl import keyboard_poll_thread
 
-    wheel_poll_thread(q)
-  else:
-    # start input poll for keyboard
-    from tools.sim.lib.keyboard_ctrl import keyboard_poll_thread
+      keyboard_poll_thread(q)
+    p.join()
 
-    keyboard_poll_thread(q)
-  p.join()
+  finally:
+    # Try cleaning up the wide camera param
+    # in case users want to use replay after
+    Params().delete("WideCameraOnly")

@@ -31,10 +31,11 @@ docker run --net=host\
   --device=/dev/input:/dev/input \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "$DIR/tmux_script.sh":/openpilot/tools/sim/tmux_script.sh \
+  -v "$DIR/out.txt":/openpilot/tools/sim/out.txt \
   -v "$DIR/gokart_controllerx/":/openpilot/tools/sim/gokart_controllerx \
   -v "$DIR/realtime.py":/openpilot/common/realtime.py \
   -v "$(dirname $DIR)/":"/gokart/" \
-  --device /dev/video0  --device /dev/video1 --device /dev/video2  --device /dev/video3  --device /dev/video4  --device /dev/video5 \
+  --device /dev/video0  --device /dev/video1 --device /dev/video2  --device /dev/video3  --device /dev/video4  --device /dev/video5  --device /dev/video6  --device /dev/video7\
   --shm-size 1G \
   -e DISPLAY=$DISPLAY \
   -e QT_X11_NO_MITSHM=1 \

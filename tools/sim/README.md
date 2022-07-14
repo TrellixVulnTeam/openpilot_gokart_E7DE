@@ -56,3 +56,26 @@ All inputs:
 
 The following resources contain more details and troubleshooting tips.
 * [CARLA on the openpilot wiki](https://github.com/commaai/openpilot/wiki/CARLA)
+
+
+#Hamid
+
+
+## Building the project
+
+```
+./build_container.sh
+./start_openpilot_docker.sh
+```
+
+## Github
+
+
+```
+git remote -v
+git remote add upstream https://github.com/commaai/openpilot.git
+git fetch upstream
+git checkout master
+git merge upstream/main
+```
+
