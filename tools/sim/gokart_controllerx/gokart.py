@@ -259,6 +259,7 @@ def webcam(camerad: Camerad, exit_event: threading.Event):
   myframeid = 0
   cap = cv2.VideoCapture(6) #set camera ID here, index X in /dev/videoX
   while not exit_event.is_set():
+    print("image recieved")
     ret, frame = cap.read()
     if not ret:
       end_of_video = True
@@ -334,10 +335,10 @@ class CarlaBridge:
     def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
         return ''.join(random.choice(chars) for _ in range(size))
     id = id_generator()
-    print("id", id)
+    print("ROS random id", id)
     rospy.init_node('Gokart_Controller' + id, log_level=rospy.INFO )
-    rospy.core.set_node_uri("http://192.168.150.107:11311")
-
+    rospy.core.set_node_uri("http://dobby.local:11311")
+    print("here", id)
     gc = Gokart_Controller()
     rate = rospy.Rate(10)
     for i in range(0,10):
