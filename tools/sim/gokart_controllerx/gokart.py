@@ -39,6 +39,11 @@ from threading import Thread
 
 
 def convert(value, in_min, in_max, out_min, out_max):
+    if value < in_min :
+      value = in_min
+    if value > in_max:
+      value = in_max
+    
     in_range = in_max - in_min
     out_range = out_max - out_min
     scale = float(value - in_min) / float(in_range)
@@ -257,7 +262,7 @@ def webcam(camerad: Camerad, exit_event: threading.Event):
   rk = Ratekeeper(20)
   # Load the video
   myframeid = 0
-  cap = cv2.VideoCapture(6) #set camera ID here, index X in /dev/videoX
+  cap = cv2.VideoCapture(4) #set camera ID here, index X in /dev/videoX
   while not exit_event.is_set():
     print("image recieved")
     ret, frame = cap.read()
@@ -518,12 +523,14 @@ class CarlaBridge:
       if is_openpilot_engaged:
         sm.update(0)
         if sm['carControl'].actuators.accel != 0 or sm['carControl'].actuators.steeringAngleDeg != 0 :
-          converted_angle = convert( sm['carControl'].actuators.steeringAngleDeg, -45, 45, 1, 9)
-          #print("car accel:", sm['carControl'].actuators.accel , " car steeringAngleDeg", sm['carControl'].actuators.steeringAngleDeg, "car converted angle", converted_angle)
+
+          converted_angle = convert( sm['carControl'].actuators.steeringAngleDeg, -25, 25, 2, 8)
+          print("car accel:", sm['carControl'].actuators.accel , " car steeringAngleDeg", sm['carControl'].actuators.steeringAngleDeg, "car converted angle", converted_angle)
           gc.set_turn_rate(converted_angle)
           #print("TYPE", type(converted_angle))
 
         # TODO gas and brake is deprecated
+        # TODO: WHY IS THIS NEEDED ??????????????????
         throttle_op = clip(sm['carControl'].actuators.accel / 1.6, 0.0, 1.0)
         brake_op = clip(-sm['carControl'].actuators.accel / 4.0, 0.0, 1.0)
         steer_op = sm['carControl'].actuators.steeringAngleDeg
@@ -531,7 +538,7 @@ class CarlaBridge:
         throttle_out = throttle_op
         steer_out = steer_op
         brake_out = brake_op
-
+        # TODO : CHECK RATE LIMIT VALUE ??????????????
         steer_out = steer_rate_limit(old_steer, steer_out)
         old_steer = steer_out
 
